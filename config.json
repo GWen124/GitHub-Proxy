@@ -1,0 +1,8 @@
+{
+  "assetUrl": "https://cdn.gw124.top",
+  "enabled": false,
+  "strictMode": false,
+  "jsDelivr": true,
+  "whiteList": ["GWen124/", "SuiYue124/"]
+}
+

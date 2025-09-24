@@ -11,7 +11,7 @@ function generateHomeHTML(config, whitelist) {
 }
 
 // ===== 手动配置区（部署前可按需修改）*****
-// 静态资源/默认域名（本地预览用；Workers 中仅用于前端展示)
+// 静态资源/默认域名，用于本地测试
 const ASSET_URL = 'https://cdn.gw124.top'
 // 反向代理前缀（一般保持 '/' 即可）
 const PREFIX = '/'

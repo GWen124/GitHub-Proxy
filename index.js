@@ -37,12 +37,12 @@ export function generateHomeHTML() {
         .toast.show { opacity: 1; transform: translateY(0); }
         @media (prefers-color-scheme: dark) {
           body { background: #fff; color: #202124; }
-          .search input { border-color: #2d333b; background: #0f1115; color: #e5e7eb; }
-          .search input:focus { box-shadow: 0 1px 6px rgba(0,0,0,.5); }
-          .result-card { background: #121721; border-color: #283042; box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.2); }
-          .btn-copy { background: #0f1115; color: #e5e7eb; border-color: #2d333b; }
-          .btn-copy:hover { background: #1b1f2a; }
-          .footer .footer-line, .footer .link-green { color: #e5e7eb; }
+          .search input { border-color: #dadce0; background: #fff; color: #202124; }
+          .search input:focus { box-shadow: 0 1px 6px rgba(32,33,36,.28); border-color: transparent; }
+          .result-card { background: #fafafa; border-color: #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04); }
+          .btn-copy { background: #fff; color: #202124; border-color: #dadce0; }
+          .btn-copy:hover { background: #f3f4f6; }
+          .footer .footer-line, .footer .link-green { color: #000; }
         }
         .tip { margin-top: 16px; color: #5f6368; font-size: 12px; }
         .footer { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; color: #5f6368; font-size: 12px; }
@@ -90,7 +90,12 @@ export function generateHomeHTML() {
             const patterns = ['github.com','raw.githubusercontent.com','gist.githubusercontent.com','raw.github.com','gist.github.com'];
             if (!patterns.some(p=>url.includes(p))) { showToast('请输入有效的 GitHub 链接'); result.style.display='none'; return; }
 
-            const finalUrl = currentDomain + '/' + url;
+            let ASSET_URL = currentDomain;
+            try{
+              const res = await fetch((window.location.origin.startsWith('file://') ? currentDomain : '') + '/config.json', { cache: 'no-store' });
+              if(res.ok){ const data = await res.json(); if(typeof data.assetUrl==='string' && data.assetUrl) ASSET_URL = data.assetUrl; }
+            }catch(_){}
+            const finalUrl = ASSET_URL + '/' + url;
             const note = '✅ 使用本代理（失败由后端自动切换 jsDelivr）';
             const badge = '<span class="badge success">本代理</span>';
 
