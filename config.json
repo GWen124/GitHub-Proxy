@@ -1,6 +1,6 @@
 {
   "ASSET_URL": "https://cdn.gw124.top",
-  "ENABLED": true,
+  "ENABLED": false,
   "STRICT_MODE": true,
   "JSDELIVR": true,
   "WHITE_LIST": ["GWen124/", "SuiYue124/"]
