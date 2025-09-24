@@ -92,15 +92,32 @@ async function handleWhitelistWithFallback(req, path) {
   }
 }
 
-// ===== 配置加载（从同源 /config.json 读取，带简单缓存）
+// ===== 配置加载（优先读 env，其次读同源 /config.json），带简单缓存
 let _cfgCache = null; let _cfgAt = 0;
+function readEnvConfig(env){
+  const v = (k, d)=> (env && typeof env[k] !== 'undefined' ? String(env[k]) : d)
+  const bool = (k, d)=>{ const s=v(k, d? '1':'0'); return /^(1|true|yes)$/i.test(String(s||'')) }
+  const arr = (k)=>{ const s=v(k, ''); if(!s) return []; try{ const j=JSON.parse(s); if(Array.isArray(j)) return j }catch(_){ } return String(s).split(',').map(x=>x.trim()).filter(Boolean) }
+  const cfg = {
+    assetUrl: v('ASSET_URL', ''),
+    enabled: bool('ENABLED', false),
+    strictMode: bool('STRICT_MODE', false),
+    jsDelivr: bool('JSDELIVR', true),
+    whiteList: arr('WHITE_LIST')
+  }
+  const any = cfg.assetUrl || cfg.enabled || cfg.strictMode || (cfg.whiteList && cfg.whiteList.length)
+  return any ? cfg : null
+}
+
 async function loadConfig(env, urlObj){
   const now = Date.now();
   if (_cfgCache && (now - _cfgAt) < 60000) return _cfgCache;
+  const envCfg = readEnvConfig(env);
+  if (envCfg) { _cfgCache = envCfg; _cfgAt = now; return _cfgCache }
   try {
     const cfgReq = new Request(new URL('/config.json', urlObj.origin).toString(), { method: 'GET' });
     const res = await env.ASSETS.fetch(cfgReq);
-    if (res.ok) { _cfgCache = await res.json(); _cfgAt = now; return _cfgCache; }
+    if (res.ok) { const raw = await res.json(); _cfgCache = { assetUrl: String(raw.ASSET_URL||''), enabled: !!raw.ENABLED, strictMode: !!raw.STRICT_MODE, jsDelivr: !!raw.JSDELIVR, whiteList: Array.isArray(raw.WHITE_LIST)? raw.WHITE_LIST: [] }; _cfgAt = now; return _cfgCache; }
   } catch(_){ }
   _cfgCache = { enabled: false, strictMode: false, jsDelivr: true, whiteList: [] };
   _cfgAt = now; return _cfgCache;

@@ -78,9 +78,9 @@
                 const res = await fetch((window.location.origin.startsWith('file://') ? currentDomain : '') + '/config.json', { cache: 'no-store' });
                 if(res.ok){
                   const data = await res.json();
-                  CFG = { enabled: !!data.enabled, strictMode: !!data.strictMode, jsDelivr: !!data.jsDelivr };
-                  WL = Array.isArray(data.whiteList) ? data.whiteList : WL;
-                  if (typeof data.assetUrl === 'string' && data.assetUrl) ASSET_URL = data.assetUrl;
+                  CFG = { enabled: !!data.ENABLED, strictMode: !!data.STRICT_MODE, jsDelivr: !!data.JSDELIVR };
+                  WL = Array.isArray(data.WHITE_LIST) ? data.WHITE_LIST : WL;
+                  if (typeof data.ASSET_URL === 'string' && data.ASSET_URL) ASSET_URL = data.ASSET_URL;
                 }
             }catch(_){ /* 忽略：离线 file:// 预览无后端 */ }
             // 生产环境不再支持通过 URL 参数覆盖开关，避免误用
