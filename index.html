@@ -95,9 +95,33 @@
             const patterns = ['github.com','raw.githubusercontent.com','gist.githubusercontent.com','raw.github.com','gist.github.com'];
             if (!patterns.some(p=>url.includes(p))) { alert('请输入有效的 GitHub 链接'); return; }
 
+            function parseOwnerRepo(u){
+                try{
+                    if(u.includes('raw.githubusercontent.com')){
+                        const m = u.match(/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\//i); if(m) return { owner:m[1], repo:m[2] };
+                    } else if(u.includes('github.com')){
+                        const m = u.match(/github\.com\/([^\/]+)\/([^\/]+)/i); if(m) return { owner:m[1], repo:m[2] };
+                    }
+                }catch(_){ }
+                return null;
+            }
             let isWL = false;
-            if (CFG.enabled && CFG.strictMode) {
-                isWL = WL.some(repo => repo.endsWith('/') ? url.includes('/' + repo.slice(0,-1) + '/') : (url.includes('/' + repo + '/') || url.includes('/' + repo + '.')));
+            if (CFG.strictMode) {
+                const or = parseOwnerRepo(url);
+                if(or){
+                    const owner = or.owner.toLowerCase();
+                    const repo = or.repo.toLowerCase();
+                    isWL = WL.some(entry=>{
+                        const e = String(entry||'');
+                        if(!e) return false;
+                        if(e.endsWith('/')){ // org/owner
+                            return owner === e.slice(0,-1).toLowerCase();
+                        } else {
+                            const [eo,er] = e.split('/');
+                            return (eo && er) ? (owner===eo.toLowerCase() && repo===er.toLowerCase()) : false;
+                        }
+                    });
+                }
             }
 
             let finalUrl, note;
