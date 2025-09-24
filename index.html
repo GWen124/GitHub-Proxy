@@ -105,6 +105,10 @@
                 result.style.display='block';
                 result.innerHTML = '<div class="result-card"><div class="note"><span style="color:#d93025">❌ 非白名单仓库，已被禁止</span></div></div>';
                 return;
+            } else if (!CFG.enabled && CFG.strictMode && !isWL) {
+                // 关闭白名单校验但仍处于严格模式：非白名单直接走 jsDelivr
+                finalUrl = convertToJsDelivr(url);
+                note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
             } else {
                 const candidate = ASSET_URL + '/' + url;
                 const ok = await headCheck(candidate);
