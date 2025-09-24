@@ -1,101 +1,63 @@
 # GitHub Proxy
 
-## 简介
-
-GitHub 文件加速代理服务，支持 release、archive 以及项目文件的加速下载，基于 Cloudflare Workers 无服务器架构，专为 GitHub Pages 和 Cloudflare Pages 设计。
-
+基于 Cloudflare Pages Functions 的 GitHub 文件代理，支持 release、archive、raw/blob、gist 等链接的一键加速与智能回退。
 
 ## 特性
+- **零后端维护**：使用 Pages Functions（`_worker.js`），同仓库提交即自动部署
+- **统一配置源**：支持 Cloudflare Pages 环境变量或同源 `config.json`（字段完全一致，推荐使用环境变量）
+- **白名单与严格模式**：仅允许指定组织/仓库走本代理；非白名单可选择回退或直接拒绝
+- **智能回退**：代理失败时后端回退 jsDelivr；前端生成前也会做 HEAD 探测并优先切换
+- **前端易用**：主页输入链接即生成代理/回退地址，支持复制、打开
 
-- **无服务器架构** - 基于 Cloudflare Workers，无需维护服务器
-- **全球 CDN 加速** - 利用 Cloudflare 全球网络，访问速度快
-- **灵活访问控制** - 支持仓库白名单、黑名单、IP 过滤、User-Agent 检查、频率限制
-- **智能回退机制** - 白名单仓库优先本代理，失败时切换 jsDelivr（可配置）
-- **自动扩缩容** - 根据访问量自动调整资源
-- **零成本部署** - 免费使用 Cloudflare Workers
+## 快速开始
+1) 部署到 Cloudflare Pages（推荐）
+- 仓库包含：`index.html`、`_worker.js`（Functions 入口）、`config.json`（可选）
+- Pages → Create application → 连接 GitHub 仓库 → Build command 留空、Output directory `/`
+- Settings → Functions 默认开启
+- 绑定自定义域名（可选）
 
-## 使用方法
+2) 可选：设置环境变量（覆盖 config.json）
+- ASSET_URL：你的代理基础域名（例如 `https://cdn.gw124.top`）
+- ENABLED：是否启用策略开关（true/false）
+- STRICT_MODE：严格白名单（true/false）
+- JSDELIVR：允许回退 jsDelivr（true/false）
+- WHITE_LIST：白名单，JSON 数组或逗号分隔字符串（如 `GWen124/,SuiYue124/,owner/repo`）
 
-在 GitHub 文件 URL 前添加代理地址即可：
+3) 直接使用
+- 原链接：`https://github.com/user/repo/archive/main.zip`
+- 代理：`https://你的域名/https://github.com/user/repo/archive/main.zip`
 
-```
-原地址：https://github.com/user/repo/archive/main.zip
-代理后：https://your-proxy-domain.com/https://github.com/user/repo/archive/main.zip
-```
+支持的 URL：release、archive、blob/raw、gist、tags、git-*
 
-### 支持的 URL 类型
+> 注：不提供私有仓库绕过能力。
 
-- **分支源码**：`https://github.com/user/repo/archive/main.zip`
-- **Release 源码**：`https://github.com/user/repo/archive/v1.0.0.tar.gz`
-- **Release 文件**：`https://github.com/user/repo/releases/download/v1.0.0/file.zip`
-- **分支文件**：`https://github.com/user/repo/blob/main/filename`
-- **Commit 文件**：`https://github.com/user/repo/blob/commit-hash/filename`
-- **Gist 文件**：`https://gist.githubusercontent.com/user/hash/raw/file`
-
-> 注：本项目不提供私有仓库绕过功能。
-
-### 前端页面
-
-访问根路径即可使用搜索引擎式主页，输入 GitHub 链接生成加速地址，支持一键复制/打开，暗色模式自动适配。
-
-## 部署方法
-
-### Cloudflare Workers 部署
-
-1. 访问 [Cloudflare Workers](https://workers.cloudflare.com)
-2. 注册并登录，点击 `Start building`
-3. 创建 Worker，复制 `script.js` 代码到编辑器
-4. 根据注释配置开关（如 `JSDELIVR_GLOBAL_SWITCH`、`WHITELIST_CONFIG`）
-5. 点击 `Save and deploy` 部署
-
-### GitHub Pages 部署
-
-1. Fork 本仓库到您的 GitHub 账户
-2. 在仓库设置中启用 GitHub Pages
-3. 选择 `index.html` 作为源文件（纯静态预览页面）
-4. 访问 `https://your-username.github.io/gh-proxy` 即可使用
-
-### 配置参数（在 `script.js` 顶部）
-
-- `ASSET_URL`：静态资源 URL
-- `PREFIX`：路径前缀，默认为 `/`，如果使用子路径如 `/gh/*`，则设置为 `/gh/`
-
-### 白名单与防滥用
-
-在 `script.js` 中修改白名单与安全策略：
-
-```javascript
-// 白名单配置
-const WHITELIST_CONFIG = {
-    enabled: true,                    // 是否启用白名单功能
-    strictMode: true,                 // 严格模式：只允许白名单中的仓库
-    rateLimitEnabled: true,           // 是否启用频率限制
-    rateLimitRequests: 100,           // 每分钟最大请求数
-    rateLimitWindow: 60,              // 时间窗口（秒）
-    ipWhitelistEnabled: false,        // 是否启用IP白名单
-    userAgentCheckEnabled: true,      // 是否检查User-Agent
-    blockedUserAgents: [              // 禁止的User-Agent
-        'curl', 'wget', 'python-requests', 'bot', 'spider', 'crawler'
-    ],
-    ipWhitelist: []                   // IP白名单
+## 配置说明（环境变量与 config.json 字段完全一致）
+```json
+{
+  "ASSET_URL": "https://cdn.gw124.top",
+  "ENABLED": true,
+  "STRICT_MODE": true,
+  "JSDELIVR": true,
+  "WHITE_LIST": ["GWen124/", "SuiYue124/"]
 }
-
-// 仓库白名单 - 只允许这些仓库被访问（以 / 结尾表示整个组织）
-const whiteList = ['GWen124/','SuiYue124/']
-
-### jsDelivr 回退策略
-
-在 `script.js` 顶部配置：
-
-```js
-// 全局 jsDelivr 开关：
-// true  -> 白名单仓库优先走本代理，失败自动切 jsDelivr；非白名单直接 jsDelivr
-// false -> 仅允许白名单仓库，非白名单禁止使用（同时全部走本代理）
-const JSDELIVR_GLOBAL_SWITCH = false
 ```
+- 以 `/` 结尾表示整个组织/用户；不以 `/` 结尾表示具体仓库
+- 严格模式开启时：非白名单将直接 403 拒绝（后端强制）；前端也不会生成链接
+- 非严格模式：非白名单也会尝试代理，失败回退 jsDelivr
 
-为本地/严格测试场景，此开关可设为 false（全部走本代理）。线上建议 true 保障可用性。
-```
+## 工作机制
+- 前端：从 `/config.json` 读取配置（或你也可以改为调用后端 `/config` 返回的同款配置）；生成链接前先对代理地址做 HEAD 探测，不可用则直接显示 jsDelivr
+- 后端：
+  - 命中 GitHub 规则 → 代理；`blob` 自动转 `raw` 重试；必要时回退 jsDelivr
+  - 严格模式 + 非白名单 → 直接 403
+  - 非代理路径 → 交给 Pages 静态资源（`env.ASSETS.fetch`）
+
+## 迁移与拓展
+- 仅静态托管（GitHub Pages）：页面可用，代理需指向你的 Worker/Pages Functions 域名
+- 切换子路径路由：修改 `_worker.js` 中 `PREFIX`（例如 `/gh/`）并在域名路由上匹配对应前缀
+
+## 免责声明
+本项目仅用于公共开源内容的加速访问。请勿用于违规用途；使用造成的风险由使用者自负。
 
 
 

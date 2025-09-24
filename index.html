@@ -110,7 +110,7 @@
                 const ok = await headCheck(candidate);
                 if (ok) {
                     finalUrl = candidate;
-                    note = '✅ 白名单仓库，使用本代理（失败自动切换）';
+                    note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
                 } else {
                     finalUrl = convertToJsDelivr(url);
                     note = '⚠️ 本代理不可用，已切换 jsDelivr';
