@@ -51,7 +51,7 @@ export function generateHomeHTML() {
         .footer .link-green::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; background-color: currentColor; transform: scaleX(0); transform-origin: center; transition: transform .25s ease; border-radius: 2px; }
         .footer .link-green:hover::after { transform: scaleX(1); }
     </style>
-    <meta name="description" content="GitHub 文件加速代理服务，支持白名单和智能切换 jsDelivr。">
+    <meta name="description" content="GitHub 文件加速代理服务，纯代理，失败自动回退到 jsDelivr。">
     <meta name="robots" content="index,follow">
     <meta name="color-scheme" content="light dark">
 </head>
@@ -60,7 +60,7 @@ export function generateHomeHTML() {
         <div class="hero">
             <div class="logo">GitHub <span class="accent">Proxy</span></div>
             <div class="search">
-            <input id="githubUrl" type="text" placeholder="粘贴 GitHub 链接，例如：https://github.com/user/repo/archive/main.zip" />
+            <input id="githubUrl" type="text" placeholder="粘贴 GitHub 链接，例如：https://github.com/user/repo/archive/main.zip" autofocus />
             <button onclick="generateProxyUrl()">生成链接</button>
             </div>
         </div>
@@ -74,57 +74,33 @@ export function generateHomeHTML() {
         let currentDomain = window.location.origin;
         if (currentDomain.startsWith('file://')) { currentDomain = 'https://cdn.gw124.top'; }
 
+        function normalizeUrl(input) {
+            let u = (input || '').trim();
+            if (!u) return '';
+            if (!/^https?:\/\//i.test(u)) u = 'https://' + u.replace(/^\/+/, '');
+            return u;
+        }
+
         async function generateProxyUrl() {
             const input = document.getElementById('githubUrl');
             const result = document.getElementById('result');
-            const url = (input.value || '').trim();
-            if (!url) { alert('请输入 GitHub 链接'); return; }
+            let url = normalizeUrl(input.value);
+            if (!url) { showToast('请输入 GitHub 链接'); result.style.display='none'; return; }
 
             const patterns = ['github.com','raw.githubusercontent.com','gist.githubusercontent.com','raw.github.com','gist.github.com'];
-            if (!patterns.some(p=>url.includes(p))) { alert('请输入有效的 GitHub 链接'); return; }
+            if (!patterns.some(p=>url.includes(p))) { showToast('请输入有效的 GitHub 链接'); result.style.display='none'; return; }
 
-            // 这些占位变量由后端模板字符串插入
-            const CFG = { enabled: __CFG_ENABLED__, strictMode: __CFG_STRICT__, jsDelivr: __CFG_JSDELIVR__ };
-            const WL = __WL__;
+            const finalUrl = currentDomain + '/' + url;
+            const note = '✅ 使用本代理（失败由后端自动切换 jsDelivr）';
+            const badge = '<span class="badge success">本代理</span>';
 
-            let isWL = false;
-            if (CFG.enabled && CFG.strictMode) {
-                isWL = WL.some(repo => repo.endsWith('/') ? url.includes('/' + repo.slice(0,-1) + '/') : (url.includes('/' + repo + '/') || url.includes('/' + repo + '.')));
-            }
-
-            let finalUrl, note;
-            if (CFG.enabled && CFG.strictMode && !isWL) {
-                if (CFG.jsDelivr) {
-                    finalUrl = convertToJsDelivr(url); note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
-                } else {
-                    result.style.display='block'; result.innerHTML = '<span style="color:#d93025">❌ 该仓库不在白名单中</span>'; return;
-                }
-            } else {
-                const candidate = currentDomain + '/' + url;
-                try {
-                    const res = await fetch(candidate, { method: 'HEAD' });
-                    const ct = res.headers.get('content-type') || '';
-                    if (!res.ok || ct.includes('text/html')) {
-                        finalUrl = convertToJsDelivr(url);
-                        note = '⚠️ 本代理不可用，已切换 jsDelivr';
-        } else {
-                        finalUrl = candidate;
-                        note = '✅ 白名单仓库，使用本代理（失败自动切换）';
-                    }
-                } catch (_) {
-                    finalUrl = convertToJsDelivr(url);
-                    note = '⚠️ 本代理请求异常，已切换 jsDelivr';
-                }
-            }
-
-            const isSuccess = note.indexOf('使用本代理') >= 0;
-            const badge = '<span class="badge ' + (isSuccess ? 'success' : 'warn') + '">' + (isSuccess ? '本代理' : 'jsDelivr') + '</span>';
             result.style.display='block';
             result.innerHTML = '<div class="result-card">'
               + '<div class="url-line"><a href="' + finalUrl + '" target="_blank" title="' + finalUrl + '">' + finalUrl + '</a></div>'
               + '<div class="note">' + badge + '<span>' + note + '</span></div>'
               + '<div class="actions"><button class="btn-copy" id="copyBtn">点击复制链接</button><button class="btn-copy push-right" id="openBtn">点击打开链接</button></div>'
               + '</div>';
+
             const copyBtn = document.getElementById('copyBtn');
             copyBtn?.addEventListener('click', () => copyToClipboard(finalUrl));
             const openBtn = document.getElementById('openBtn');
@@ -158,23 +134,8 @@ export function generateHomeHTML() {
             setTimeout(()=> el.classList.remove('show'), 1800);
         }
 
-        function convertToJsDelivr(url) {
-            if (url.includes('raw.githubusercontent.com')) {
-                const m = url.match(/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)/);
-                if (m) {
-                    let branch = m[3];
-                    const r = branch.match(/^refs\/heads\/([^\/]+)$/);
-                    if (r) branch = r[1];
-                    return 'https://cdn.jsdelivr.net/gh/' + m[1] + '/' + m[2] + '@' + branch + '/' + m[4];
-                }
-            } else if (url.includes('github.com')) {
-                const m = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)/); if (m) { return 'https://cdn.jsdelivr.net/gh/' + m[1] + '/' + m[2] + '@' + m[3] + '/' + m[4]; }
-                const a = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/archive\/([^\/]+)\.zip/); if (a) { return 'https://cdn.jsdelivr.net/gh/' + a[1] + '/' + a[2] + '@' + a[3]; }
-            }
-            return url;
-        }
-
         document.getElementById('githubUrl').addEventListener('keypress', function(e){ if(e.key==='Enter'){ generateProxyUrl(); }});
+        window.addEventListener('load', () => { document.getElementById('githubUrl')?.focus(); });
     </script>
 </body>
 </html>
