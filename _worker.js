@@ -92,6 +92,14 @@ async function handleWhitelistWithFallback(req, path) {
   }
 }
 
+function redirectToJsDelivr(path){
+  let to
+  if (/^https?:\/\/raw\.(?:githubusercontent|github)\.com\//.test(path)) to = convertRawToJsDelivrUrl(path)
+  else to = path.replace('/blob/', '@').replace(/^(?:https?:\/\/)?github\.com/, 'https://cdn.jsdelivr.net/gh')
+  const h = new Headers({ 'location': to, 'access-control-allow-origin': '*', 'access-control-expose-headers': '*' })
+  return new Response(null, { status: 302, headers: h })
+}
+
 // ===== 配置加载（优先读 env，其次读同源 /config.json），带简单缓存
 let _cfgCache = null; let _cfgAt = 0;
 function readEnvConfig(env){
@@ -154,21 +162,21 @@ async function fetchHandler(request, env) {
   path = path.replace(/^@+/, '')
   path = path.replace(/^https?:\/\/https?:\/:\//, 'https://')
 
+  const isWL = isWhitelisted(path, cfg.whiteList)
+  const whitelistStrict = cfg.enabled && cfg.strictMode
+  const whitelistPreferred = !cfg.enabled && cfg.strictMode
+
   if (path.search(exp1) === 0 || path.search(exp5) === 0 || path.search(exp6) === 0 || path.search(exp3) === 0) {
-    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
-      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
-    }
+    if (whitelistStrict && !isWL) return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    if (whitelistPreferred && !isWL) return redirectToJsDelivr(path)
     return httpHandler(req, path)
   } else if (path.search(exp2) === 0) {
-    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
-      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
-    }
-    // 严格模式下白名单通过才尝试代理并回退；否则直接拒绝
+    if (whitelistStrict && !isWL) return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    if (whitelistPreferred && !isWL) return redirectToJsDelivr(path)
     return handleWhitelistWithFallback(req, path)
   } else if (path.search(exp4) === 0) {
-    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
-      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
-    }
+    if (whitelistStrict && !isWL) return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    if (whitelistPreferred && !isWL) return redirectToJsDelivr(path)
     return handleWhitelistWithFallback(req, path)
   } else {
     // 非代理路径：交给 Pages 静态资源
