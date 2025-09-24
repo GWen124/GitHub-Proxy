@@ -107,26 +107,13 @@
                 return;
             } else {
                 const candidate = ASSET_URL + '/' + url;
-                let sameOrigin = false;
-                try { sameOrigin = (new URL(candidate)).origin === window.location.origin; } catch(_) { sameOrigin = false; }
-                if (!sameOrigin) {
+                const ok = await headCheck(candidate);
+                if (ok) {
                     finalUrl = candidate;
-                    note = '✅ 使用本代理（失败由后端自动回退 jsDelivr）';
+                    note = '✅ 白名单仓库，使用本代理（失败自动切换）';
                 } else {
-                    try {
-                        const res = await fetch(candidate, { method: 'HEAD' });
-                        const ct = res.headers.get('content-type') || '';
-                        if (!res.ok || ct.includes('text/html')) {
-                            finalUrl = convertToJsDelivr(url);
-                            note = '⚠️ 本代理不可用，已切换 jsDelivr';
-                        } else {
-                            finalUrl = candidate;
-                            note = '✅ 白名单仓库，使用本代理（失败自动切换）';
-                        }
-                    } catch (_) {
-                        finalUrl = convertToJsDelivr(url);
-                        note = '⚠️ 本代理请求异常，已切换 jsDelivr';
-                    }
+                    finalUrl = convertToJsDelivr(url);
+                    note = '⚠️ 本代理不可用，已切换 jsDelivr';
                 }
             }
 
@@ -169,6 +156,17 @@
             if(!el){ el = document.createElement('div'); el.id='toast'; el.className='toast'; document.body.appendChild(el); }
             el.textContent = text; el.classList.add('show');
             setTimeout(()=> el.classList.remove('show'), 1800);
+        }
+
+        async function headCheck(u, timeoutMs = 1800) {
+            try {
+                const ctrl = new AbortController();
+                const timer = setTimeout(()=>ctrl.abort(), timeoutMs);
+                const res = await fetch(u, { method: 'HEAD', mode: 'cors', signal: ctrl.signal });
+                clearTimeout(timer);
+                const ct = res.headers.get('content-type') || '';
+                return res.ok && !ct.includes('text/html');
+            } catch (_) { return false; }
         }
 
         function convertToJsDelivr(url) {
