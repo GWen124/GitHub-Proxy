@@ -17,7 +17,7 @@ const ASSET_URL = 'https://cdn.gw124.top/'
 const PREFIX = '/'
 // 全局 jsDelivr 开关：
 // true  -> 白名单仓库优先走本代理，失败自动切 jsDelivr；非白名单直接 jsDelivr
-// false -> 仅允许白名单仓库，非白名单禁止使用（同时全部走本代理）
+// false -> 所有仓库都走本代理（可能受 Cloudflare 限制，建议配合前端 HEAD 检测）
 const JSDELIVR_GLOBAL_SWITCH = false
 
 // 白名单与防滥用总开关（建议保持开启）
@@ -69,31 +69,7 @@ function checkRepositoryWhitelist(url){ if(!WHITELIST_CONFIG.enabled) return tru
 function checkRepositoryBlacklist(url){ if(!REPOSITORY_BLACKLIST_CONFIG.enabled) return {allowed:true,reason:'仓库黑名单未启用'}; const m=url.match(/github\.com\/([^\/]+\/[^\/]+)/); if(!m) return {allowed:true,reason:'无法提取仓库信息'}; const repo=m[1]; for(const b of REPOSITORY_BLACKLIST_CONFIG.repositories){ if(b.endsWith('/')){ const u=b.slice(0,-1); if(repo.startsWith(u+'/')) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } else if(repo===b) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } return {allowed:true,reason:'通过仓库黑名单检查'} }
 function checkKeywordFilter(path){ if(!KEYWORD_FILTER_CONFIG.enabled) return {allowed:true,reason:'关键字过滤未启用'}; const u=path.toLowerCase(); for(const k of KEYWORD_FILTER_CONFIG.blockKeywords){ if(u.includes(k.toLowerCase())) return {allowed:false,reason:`包含禁止关键字: ${k}`} } if(KEYWORD_FILTER_CONFIG.allowKeywords.length>0){ const ok=KEYWORD_FILTER_CONFIG.allowKeywords.some(k=>u.includes(k.toLowerCase())); if(!ok) return {allowed:false,reason:`不包含允许关键字: ${KEYWORD_FILTER_CONFIG.allowKeywords.join(', ')}`} } return {allowed:true,reason:'通过关键字过滤检查'} }
 
-function securityCheck(request,url){
-    if(!WHITELIST_CONFIG.enabled){
-        // 当全局开关为 false 时，强制要求仓库必须在白名单内
-        if(JSDELIVR_GLOBAL_SWITCH===false){
-            const ok=checkRepositoryWhitelist(url)
-            if(!ok) return makeResponse('Access denied: Repository not in whitelist',403)
-        }
-        return null
-    }
-    const ip=getClientIP(request);
-    const checks=[
-        {check:()=>checkIPWhitelist(ip),message:'IP not in whitelist'},
-        {check:()=>checkUserAgent(request),message:'User-Agent blocked'},
-        {check:()=>checkRateLimit(ip),message:'Rate limit exceeded. Please try again later.',status:429},
-        {check:()=>checkKeywordFilter(url),message:'keyword filter'},
-        {check:()=>checkRepositoryBlacklist(url),message:'repository blacklist'},
-        {check:()=>checkRepositoryWhitelist(url),message:'Repository not in whitelist'}
-    ];
-    for(const {check,message,status=403} of checks){
-        const r=check();
-        if(r===false) return makeResponse(`Access denied: ${message}`,status);
-        else if(r && typeof r==='object' && !r.allowed) return makeResponse(`Access denied: ${r.reason}`,status)
-    }
-    return null
-}
+function securityCheck(request,url){ if(!WHITELIST_CONFIG.enabled) return null; const ip=getClientIP(request); const checks=[{check:()=>checkIPWhitelist(ip),message:'IP not in whitelist'},{check:()=>checkUserAgent(request),message:'User-Agent blocked'},{check:()=>checkRateLimit(ip),message:'Rate limit exceeded. Please try again later.',status:429},{check:()=>checkKeywordFilter(url),message:'keyword filter'},{check:()=>checkRepositoryBlacklist(url),message:'repository blacklist'},{check:()=>checkRepositoryWhitelist(url),message:'Repository not in whitelist'}]; for(const {check,message,status=403} of checks){ const r=check(); if(r===false) return makeResponse(`Access denied: ${message}`,status); else if(r && typeof r==='object' && !r.allowed) return makeResponse(`Access denied: ${r.reason}`,status) } return null }
 
 const exp1=/^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:releases|archive)\/.*$/i
 const exp2=/^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:blob|raw)\/.*$/i
@@ -113,9 +89,8 @@ async function httpHandler(req,pathname){ const reqHdrRaw=req.headers; if(req.me
 
 async function handleWhitelistWithFallback(req,path){ try{ const modified=path.replace('/blob/','/raw/'); const resp=await httpHandler(req,modified); if(isProxyResponseValid(resp)) return resp; let to; if(/^https?:\/\/raw\.(?:githubusercontent|github)\.com\//.test(path)) to=convertRawToJsDelivrUrl(path); else to=path.replace('/blob/','@').replace(/^(?:https?:\/\/)?github\.com/,'https://cdn.jsdelivr.net/gh'); return Response.redirect(to,302) } catch{ let to; if(/^https?:\/\/raw\.(?:githubusercontent|github)\.com\//.test(path)) to=convertRawToJsDelivrUrl(path); else to=path.replace('/blob/','@').replace(/^(?:https?:\/\/)?github\.com/,'https://cdn.jsdelivr.net/gh'); return Response.redirect(to,302) } }
 
-async function handleRawGitHubUrl(req,path){ const isWL=checkRepositoryWhitelist(path); if(JSDELIVR_GLOBAL_SWITCH){ if(isWL) return handleWhitelistWithFallback(req,path); const to=convertRawToJsDelivrUrl(path); return Response.redirect(to,302) } else { // false 模式：仅白名单可用；白名单失败回退 jsDelivr
-  if(isWL) return handleWhitelistWithFallback(req,path);
-  return makeResponse('Access denied: Repository not in whitelist',403)
+async function handleRawGitHubUrl(req,path){ const isWL=checkRepositoryWhitelist(path); if(JSDELIVR_GLOBAL_SWITCH){ if(isWL) return handleWhitelistWithFallback(req,path); const to=convertRawToJsDelivrUrl(path); return Response.redirect(to,302) } else { // 全走本代理
+  return httpHandler(req,path)
 } }
 
 async function fetchHandler(e){ const req=e.request; const urlObj=new URL(req.url);
@@ -124,7 +99,7 @@ async function fetchHandler(e){ const req=e.request; const urlObj=new URL(req.ur
     const data = { enabled: WHITELIST_CONFIG.enabled, strictMode: WHITELIST_CONFIG.strictMode, jsDelivr: JSDELIVR_GLOBAL_SWITCH, whiteList };
     return makeResponse(JSON.stringify(data), 200, { 'content-type': 'application/json; charset=utf-8' });
   }
-  let path=urlObj.searchParams.get('q'); if(path) return Response.redirect('https://'+urlObj.host+PREFIX+path,301); path=urlObj.href.substr(urlObj.origin.length+PREFIX.length).replace(/^https?:\/+/, 'https://'); if(path===''||path==='/'||path===urlObj.origin+'/'){ const html=generateHomeHTML({enabled:WHITELIST_CONFIG.enabled,strictMode:WHITELIST_CONFIG.strictMode,jsDelivr:JSDELIVR_GLOBAL_SWITCH},whiteList); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } if(path.search(exp1)===0 || path.search(exp5)===0 || path.search(exp6)===0 || path.search(exp3)===0) return httpHandler(req,path); else if(path.search(exp2)===0){ const isWL=checkRepositoryWhitelist(path); if(JSDELIVR_GLOBAL_SWITCH){ if(isWL) return handleWhitelistWithFallback(req,path); const to=path.replace('/blob/','@').replace(/^(?:https?:\/\/)?github\.com/,'https://cdn.jsdelivr.net/gh'); return Response.redirect(to,302) } else { if(isWL) return handleWhitelistWithFallback(req,path); return makeResponse('Access denied: Repository not in whitelist',403) } } else if(path.search(exp4)===0) return handleRawGitHubUrl(req,path); else { const html=generateHomeHTML({enabled:WHITELIST_CONFIG.enabled,strictMode:WHITELIST_CONFIG.strictMode,jsDelivr:JSDELIVR_GLOBAL_SWITCH},whiteList); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } }
+  let path=urlObj.searchParams.get('q'); if(path) return Response.redirect('https://'+urlObj.host+PREFIX+path,301); path=urlObj.href.substr(urlObj.origin.length+PREFIX.length).replace(/^https?:\/+/, 'https://'); if(path===''||path==='/'||path===urlObj.origin+'/'){ const html=generateHomeHTML({enabled:WHITELIST_CONFIG.enabled,strictMode:WHITELIST_CONFIG.strictMode,jsDelivr:JSDELIVR_GLOBAL_SWITCH},whiteList); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } if(path.search(exp1)===0 || path.search(exp5)===0 || path.search(exp6)===0 || path.search(exp3)===0) return httpHandler(req,path); else if(path.search(exp2)===0){ const isWL=checkRepositoryWhitelist(path); if(JSDELIVR_GLOBAL_SWITCH){ if(isWL) return handleWhitelistWithFallback(req,path); const to=path.replace('/blob/','@').replace(/^(?:https?:\/\/)?github\.com/,'https://cdn.jsdelivr.net/gh'); return Response.redirect(to,302) } else { path=path.replace('/blob/','/raw/'); return httpHandler(req,path) } } else if(path.search(exp4)===0) return handleRawGitHubUrl(req,path); else { const html=generateHomeHTML({enabled:WHITELIST_CONFIG.enabled,strictMode:WHITELIST_CONFIG.strictMode,jsDelivr:JSDELIVR_GLOBAL_SWITCH},whiteList); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } }
 
 addEventListener('fetch', e=>{ const ret=fetchHandler(e).catch(err=>makeResponse(`GitHub-Proxy Error: ${err.message}`,502)); e.respondWith(ret) })
 
