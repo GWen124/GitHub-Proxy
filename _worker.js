@@ -146,6 +146,7 @@ async function fetchHandler(request, env) {
     if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
       return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
     }
+    // 严格模式下白名单通过才尝试代理并回退；否则直接拒绝
     return handleWhitelistWithFallback(req, path)
   } else if (path.search(exp4) === 0) {
     if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {

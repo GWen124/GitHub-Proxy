@@ -102,11 +102,9 @@
 
             let finalUrl, note;
             if (CFG.enabled && CFG.strictMode && !isWL) {
-                if (CFG.jsDelivr) {
-                    finalUrl = convertToJsDelivr(url); note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
-                } else {
-                    result.style.display='block'; result.innerHTML = '<span style="color:#d93025">❌ 该仓库不在白名单中</span>'; return;
-                }
+                result.style.display='block';
+                result.innerHTML = '<div class="result-card"><div class="note"><span style="color:#d93025">❌ 非白名单仓库，已被禁止</span></div></div>';
+                return;
             } else {
                 const candidate = ASSET_URL + '/' + url;
                 let sameOrigin = false;
