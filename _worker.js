@@ -92,8 +92,8 @@ async function handleWhitelistWithFallback(req, path) {
   }
 }
 
-async function fetchHandler(e) {
-  const req = e.request
+async function fetchHandler(request, env) {
+  const req = request
   const urlObj = new URL(req.url)
 
   // 仅处理代理路径，其它仍交给 Pages 静态资源
@@ -111,10 +111,15 @@ async function fetchHandler(e) {
     return handleWhitelistWithFallback(req, path)
   } else {
     // 非代理路径：交给 Pages 静态资源
-    return fetch(req)
+    return env.ASSETS.fetch(req)
   }
 }
 
-addEventListener('fetch', e => { const ret = fetchHandler(e).catch(err => makeResponse(`GitHub-Proxy Error: ${err.message}`, 502)); e.respondWith(ret) })
+export default {
+  async fetch(request, env, ctx) {
+    try { return await fetchHandler(request, env) }
+    catch (err) { return makeResponse(`GitHub-Proxy Error: ${err.message}`, 502) }
+  }
+}
 
 
