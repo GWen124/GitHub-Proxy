@@ -24,7 +24,7 @@ const JSDELIVR_GLOBAL_SWITCH = false
 const WHITELIST_CONFIG = {
     // 开关：是否启用白名单校验
     enabled: true,
-    // 严格模式：仅允许白名单仓库r
+    // 严格模式：仅允许白名单仓库
     strictMode: true,
     // 频率限制（按 IP 简单计数，Workers 内存级，重启/热更新会清空）
     rateLimitEnabled: true,
@@ -65,8 +65,9 @@ function checkUserAgent(request){ if(!WHITELIST_CONFIG.userAgentCheckEnabled) re
 const rateLimitStorage = new Map()
 function checkRateLimit(ip){ if(!WHITELIST_CONFIG.rateLimitEnabled) return true; const now=Date.now()/1000; const win=now-WHITELIST_CONFIG.rateLimitWindow; let reqs=rateLimitStorage.get(ip)||[]; reqs=reqs.filter(t=>t>win); if(reqs.length>=WHITELIST_CONFIG.rateLimitRequests) return false; reqs.push(now); rateLimitStorage.set(ip,reqs); return true }
 
-function checkRepositoryWhitelist(url){ if(!WHITELIST_CONFIG.enabled) return true; const m=url.match(/github\.com\/([^\/]+\/[^\/]+)/); if(!m) return false; const repo=m[1]; if(WHITELIST_CONFIG.strictMode){ for(const allowed of whiteList){ if(allowed.endsWith('/')){ if(repo.startsWith(allowed.slice(0,-1))) return true } else if(repo===allowed) return true } return false } return true }
-function checkRepositoryBlacklist(url){ if(!REPOSITORY_BLACKLIST_CONFIG.enabled) return {allowed:true,reason:'仓库黑名单未启用'}; const m=url.match(/github\.com\/([^\/]+\/[^\/]+)/); if(!m) return {allowed:true,reason:'无法提取仓库信息'}; const repo=m[1]; for(const b of REPOSITORY_BLACKLIST_CONFIG.repositories){ if(b.endsWith('/')){ const u=b.slice(0,-1); if(repo.startsWith(u+'/')) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } else if(repo===b) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } return {allowed:true,reason:'通过仓库黑名单检查'} }
+function extractRepositoryFromUrl(url){ let m=url.match(/github\.com\/([^\/]+\/[^\/]+)/); if(m) return m[1]; m=url.match(/raw\.(?:githubusercontent|github)\.com\/([^\/]+)\/([^\/]+)/); if(m) return `${m[1]}/${m[2]}`; return null }
+function checkRepositoryWhitelist(url){ if(!WHITELIST_CONFIG.enabled) return true; const repo=extractRepositoryFromUrl(url); if(!repo) return false; if(WHITELIST_CONFIG.strictMode){ for(const allowed of whiteList){ if(allowed.endsWith('/')){ if(repo.startsWith(allowed.slice(0,-1))) return true } else if(repo===allowed) return true } return false } return true }
+function checkRepositoryBlacklist(url){ if(!REPOSITORY_BLACKLIST_CONFIG.enabled) return {allowed:true,reason:'仓库黑名单未启用'}; const repo=extractRepositoryFromUrl(url); if(!repo) return {allowed:true,reason:'无法提取仓库信息'}; for(const b of REPOSITORY_BLACKLIST_CONFIG.repositories){ if(b.endsWith('/')){ const u=b.slice(0,-1); if(repo.startsWith(u+'/')) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } else if(repo===b) return {allowed:false,reason:`仓库在黑名单中: ${b}`} } return {allowed:true,reason:'通过仓库黑名单检查'} }
 function checkKeywordFilter(path){ if(!KEYWORD_FILTER_CONFIG.enabled) return {allowed:true,reason:'关键字过滤未启用'}; const u=path.toLowerCase(); for(const k of KEYWORD_FILTER_CONFIG.blockKeywords){ if(u.includes(k.toLowerCase())) return {allowed:false,reason:`包含禁止关键字: ${k}`} } if(KEYWORD_FILTER_CONFIG.allowKeywords.length>0){ const ok=KEYWORD_FILTER_CONFIG.allowKeywords.some(k=>u.includes(k.toLowerCase())); if(!ok) return {allowed:false,reason:`不包含允许关键字: ${KEYWORD_FILTER_CONFIG.allowKeywords.join(', ')}`} } return {allowed:true,reason:'通过关键字过滤检查'} }
 
 function securityCheck(request,url){ if(!WHITELIST_CONFIG.enabled) return null; const ip=getClientIP(request); const checks=[{check:()=>checkIPWhitelist(ip),message:'IP not in whitelist'},{check:()=>checkUserAgent(request),message:'User-Agent blocked'},{check:()=>checkRateLimit(ip),message:'Rate limit exceeded. Please try again later.',status:429},{check:()=>checkKeywordFilter(url),message:'keyword filter'},{check:()=>checkRepositoryBlacklist(url),message:'repository blacklist'},{check:()=>checkRepositoryWhitelist(url),message:'Repository not in whitelist'}]; for(const {check,message,status=403} of checks){ const r=check(); if(r===false) return makeResponse(`Access denied: ${message}`,status); else if(r && typeof r==='object' && !r.allowed) return makeResponse(`Access denied: ${r.reason}`,status) } return null }
