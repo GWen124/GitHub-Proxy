@@ -36,7 +36,7 @@ export function generateHomeHTML() {
         .toast { position: fixed; right: 16px; top: 16px; background: #202124; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 12px; opacity: 0; transform: translateY(-6px); transition: all .2s ease; pointer-events: none; }
         .toast.show { opacity: 1; transform: translateY(0); }
         @media (prefers-color-scheme: dark) {
-          body { background: #0f1115; color: #e5e7eb; }
+          body { background: #fff; color: #202124; }
           .search input { border-color: #2d333b; background: #0f1115; color: #e5e7eb; }
           .search input:focus { box-shadow: 0 1px 6px rgba(0,0,0,.5); }
           .result-card { background: #121721; border-color: #283042; box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.2); }
