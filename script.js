@@ -18,7 +18,7 @@ const PREFIX = '/'
 // 全局 jsDelivr 开关：
 // true  -> 白名单仓库优先走本代理，失败自动切 jsDelivr；非白名单直接 jsDelivr
 // false -> 所有仓库都走本代理（可能受 Cloudflare 限制，建议配合前端 HEAD 检测）
-const JSDELIVR_GLOBAL_SWITCH = true
+const JSDELIVR_GLOBAL_SWITCH = false
 
 // 白名单与防滥用总开关（建议保持开启）
 const WHITELIST_CONFIG = {
