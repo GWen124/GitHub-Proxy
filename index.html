@@ -109,7 +109,8 @@
                 }
             } else {
                 const candidate = ASSET_URL + '/' + url;
-                const sameOrigin = currentDomain === window.location.origin;
+                let sameOrigin = false;
+                try { sameOrigin = (new URL(candidate)).origin === window.location.origin; } catch(_) { sameOrigin = false; }
                 if (!sameOrigin) {
                     finalUrl = candidate;
                     note = '✅ 使用本代理（失败由后端自动回退 jsDelivr）';

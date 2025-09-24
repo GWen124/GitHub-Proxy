@@ -27,6 +27,19 @@ const exp6=/^(?:https?:\/\/)?github\.com\/.+?\/.+?\/tags.*$/i
 
 function checkUrl(url){ for(let exp of [exp1,exp2,exp3,exp4,exp5,exp6]){ if(url.search(exp)===0) return true } return false }
 
+// ===== 配置加载（统一真源：config.json） =====
+let _cachedConfig = null; let _cachedAt = 0;
+async function loadConfig(){
+  const now = Date.now();
+  if(_cachedConfig && now - _cachedAt < 60 * 1000) return _cachedConfig;
+  try{
+    const res = await fetch(ASSET_URL + '/config.json', { cache: 'no-store' });
+    if(res.ok){ _cachedConfig = await res.json(); _cachedAt = now; return _cachedConfig }
+  }catch(_){ }
+  _cachedConfig = { assetUrl: ASSET_URL, enabled: false, strictMode: false, jsDelivr: true, whiteList: [] };
+  _cachedAt = now; return _cachedConfig;
+}
+
 async function proxy(urlObj,reqInit){ const res=await fetch(urlObj.href,reqInit); const hdr=new Headers(res.headers); const status=res.status; if(hdr.has('location')){ let loc=hdr.get('location'); if(checkUrl(loc)) hdr.set('location',PREFIX+loc); else { reqInit.redirect='follow'; return proxy(new URL(loc),reqInit) } } hdr.set('access-control-expose-headers','*'); hdr.set('access-control-allow-origin','*'); hdr.set('x-proxy-source','local'); hdr.delete('content-security-policy'); hdr.delete('content-security-policy-report-only'); hdr.delete('clear-site-data'); return new Response(res.body,{status,headers:hdr}) }
 
 function isProxyResponseValid(response){ if(response.status>=400) return false; const ct=response.headers.get('content-type')||''; if(response.status===200 && ct.includes('text/html')) return false; return true }
@@ -38,8 +51,8 @@ async function handleWhitelistWithFallback(req,path){ try{ const modified=path.r
 async function handleRawGitHubUrl(req,path){ return handleWhitelistWithFallback(req,path) }
 
 async function fetchHandler(e){ const req=e.request; const urlObj=new URL(req.url);
-  if (urlObj.pathname === PREFIX + 'config') { const data = { enabled: false, strictMode: false, jsDelivr: false, whiteList: [] }; return makeResponse(JSON.stringify(data), 200, { 'content-type': 'application/json; charset=utf-8' }); }
-  let path=urlObj.searchParams.get('q'); if(path) return Response.redirect('https://'+urlObj.host+PREFIX+path,301); path=urlObj.href.substr(urlObj.origin.length+PREFIX.length).replace(/^https?:\/+/, 'https://'); path=path.replace(/^@+/, ''); path=path.replace(/^https?:\/\/https?:\/:\//,'https://'); if(path===''||path==='/'||path===urlObj.origin+'/'){ const html=generateHomeHTML({enabled:false,strictMode:false,jsDelivr:false},[]); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } if(path.search(exp1)===0 || path.search(exp5)===0 || path.search(exp6)===0 || path.search(exp3)===0) return httpHandler(req,path); else if(path.search(exp2)===0){ return handleWhitelistWithFallback(req,path) } else if(path.search(exp4)===0) return handleRawGitHubUrl(req,path); else { const html=generateHomeHTML({enabled:false,strictMode:false,jsDelivr:false},[]); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } }
+  if (urlObj.pathname === PREFIX + 'config') { const data = await loadConfig(); return makeResponse(JSON.stringify(data), 200, { 'content-type': 'application/json; charset=utf-8' }); }
+  let path=urlObj.searchParams.get('q'); if(path) return Response.redirect('https://'+urlObj.host+PREFIX+path,301); path=urlObj.href.substr(urlObj.origin.length+PREFIX.length).replace(/^https?:\/+/, 'https://'); path=path.replace(/^@+/, ''); path=path.replace(/^https?:\/\/https?:\/\//,'https://'); if(path===''||path==='/'||path===urlObj.origin+'/'){ const cfg=await loadConfig(); const html=generateHomeHTML({enabled:!!cfg.enabled,strictMode:!!cfg.strictMode,jsDelivr:!!cfg.jsDelivr},cfg.whiteList||[]); return makeResponse(html,200,{'content-type':'text/html; charset=utf-8'}) } if(path.search(exp1)===0 || path.search(exp5)===0 || path.search(exp6)===0 || path.search(exp3)===0) return httpHandler(req,path); else if(path.search(exp2)===0){ return handleWhitelistWithFallback(req,path) } else if(path.search(exp4)===0) return handleRawGitHubUrl(req,path); else { const cfg=await loadConfig(); return fetch((cfg.assetUrl||ASSET_URL) + path) } }
 
 addEventListener('fetch', e=>{ const ret=fetchHandler(e).catch(err=>makeResponse(`GitHub-Proxy Error: ${err.message}`,502)); e.respondWith(ret) })
 
