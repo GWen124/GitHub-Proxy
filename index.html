@@ -147,13 +147,20 @@
                     }
                 } else {
                     const candidate = ASSET_URL + '/' + url;
-                    const ok = await headCheck(candidate);
-                    if (ok) {
+                    let sameOrigin = false;
+                    try { sameOrigin = (new URL(candidate)).origin === window.location.origin; } catch(_){ sameOrigin = false; }
+                    if (!sameOrigin) {
                         finalUrl = candidate;
                         note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
                     } else {
-                        finalUrl = convertToJsDelivr(url);
-                        note = '⚠️ 本代理不可用，已切换 jsDelivr（白名单回退）';
+                        const ok = await headCheck(candidate);
+                        if (ok) {
+                            finalUrl = candidate;
+                            note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
+                        } else {
+                            finalUrl = convertToJsDelivr(url);
+                            note = '⚠️ 本代理不可用，已切换 jsDelivr（白名单回退）';
+                        }
                     }
                 }
             }
