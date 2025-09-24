@@ -90,11 +90,14 @@ const whiteList = ['GWen124/','SuiYue124/']
 ```js
 // 全局 jsDelivr 开关：
 // true  -> 白名单仓库优先走本代理，失败自动切 jsDelivr；非白名单直接 jsDelivr
-// false -> 所有仓库都走本代理（可能受 CF 限制，建议配合前端 HEAD 检测）
+// false -> 仅允许白名单仓库，非白名单禁止使用（同时全部走本代理）
 const JSDELIVR_GLOBAL_SWITCH = false
 ```
 
-为本地/严格测试场景，此开关可设为 false（全部走本代理）。线上建议 true 保障可用性。
+当设置为 false 时：
+- 强制按仓库白名单校验（即使关闭白名单功能也会执行校验）
+- 白名单仓库：先走本代理，若检测到本代理失败，将自动回退 jsDelivr
+- 非白名单仓库：不使用任何代理，直接 403 拦截
 ```
 
 
