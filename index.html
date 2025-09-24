@@ -134,18 +134,26 @@
                 finalUrl = convertToJsDelivr(url);
                 note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
             } else {
-                const candidate = ASSET_URL + '/' + url;
-                if (isWL) {
-                    finalUrl = candidate;
-                    note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
+                // 仅白名单允许尝试本代理；非白名单的处理：
+                // - 严格模式且关闭校验（ENABLED=false, STRICT_MODE=true）：直接 jsDelivr
+                // - 其他情况：也走 jsDelivr（更安全）
+                if (!isWL) {
+                    if (!CFG.enabled && CFG.strictMode) {
+                        finalUrl = convertToJsDelivr(url);
+                        note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
+                    } else {
+                        finalUrl = convertToJsDelivr(url);
+                        note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
+                    }
                 } else {
+                    const candidate = ASSET_URL + '/' + url;
                     const ok = await headCheck(candidate);
                     if (ok) {
                         finalUrl = candidate;
                         note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
                     } else {
                         finalUrl = convertToJsDelivr(url);
-                        note = '⚠️ 本代理不可用，已切换 jsDelivr';
+                        note = '⚠️ 本代理不可用，已切换 jsDelivr（白名单回退）';
                     }
                 }
             }
