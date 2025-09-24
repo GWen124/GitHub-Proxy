@@ -111,13 +111,18 @@
                 note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
             } else {
                 const candidate = ASSET_URL + '/' + url;
-                const ok = await headCheck(candidate);
-                if (ok) {
+                if (isWL) {
                     finalUrl = candidate;
                     note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
                 } else {
-                    finalUrl = convertToJsDelivr(url);
-                    note = '⚠️ 本代理不可用，已切换 jsDelivr';
+                    const ok = await headCheck(candidate);
+                    if (ok) {
+                        finalUrl = candidate;
+                        note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
+                    } else {
+                        finalUrl = convertToJsDelivr(url);
+                        note = '⚠️ 本代理不可用，已切换 jsDelivr';
+                    }
                 }
             }
 
