@@ -92,9 +92,43 @@ async function handleWhitelistWithFallback(req, path) {
   }
 }
 
+// ===== 配置加载（从同源 /config.json 读取，带简单缓存）
+let _cfgCache = null; let _cfgAt = 0;
+async function loadConfig(env, urlObj){
+  const now = Date.now();
+  if (_cfgCache && (now - _cfgAt) < 60000) return _cfgCache;
+  try {
+    const cfgReq = new Request(new URL('/config.json', urlObj.origin).toString(), { method: 'GET' });
+    const res = await env.ASSETS.fetch(cfgReq);
+    if (res.ok) { _cfgCache = await res.json(); _cfgAt = now; return _cfgCache; }
+  } catch(_){ }
+  _cfgCache = { enabled: false, strictMode: false, jsDelivr: true, whiteList: [] };
+  _cfgAt = now; return _cfgCache;
+}
+
+function isWhitelisted(path, whiteList){
+  if (!Array.isArray(whiteList) || whiteList.length === 0) return false;
+  try{
+    // raw.githubusercontent.com/{owner}/{repo}/...
+    const mRaw = path.match(/raw\.(?:githubusercontent|github)\.com\/([^\/]+)\/([^\/]+)\//);
+    if (mRaw) {
+      const owner = mRaw[1]; const repo = mRaw[2];
+      return whiteList.some(w=> w.endsWith('/') ? (path.includes(`/${w.slice(0,-1)}/`)) : (path.includes(`/${owner}/${repo}/`) || path.includes(`/${owner}/${repo}@`)) );
+    }
+    // github.com/{owner}/{repo}/...
+    const mGh = path.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (mGh) {
+      const owner = mGh[1]; const repo = mGh[2];
+      return whiteList.some(w=> w.endsWith('/') ? (path.includes(`/${w.slice(0,-1)}/`)) : (path.includes(`/${owner}/${repo}/`) || path.includes(`/${owner}/${repo}@`)) );
+    }
+  }catch(_){ }
+  return false;
+}
+
 async function fetchHandler(request, env) {
   const req = request
   const urlObj = new URL(req.url)
+  const cfg = await loadConfig(env, urlObj)
 
   // 仅处理代理路径，其它仍交给 Pages 静态资源
   let path = urlObj.searchParams.get('q')
@@ -104,10 +138,19 @@ async function fetchHandler(request, env) {
   path = path.replace(/^https?:\/\/https?:\/:\//, 'https://')
 
   if (path.search(exp1) === 0 || path.search(exp5) === 0 || path.search(exp6) === 0 || path.search(exp3) === 0) {
+    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
+      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    }
     return httpHandler(req, path)
   } else if (path.search(exp2) === 0) {
+    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
+      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    }
     return handleWhitelistWithFallback(req, path)
   } else if (path.search(exp4) === 0) {
+    if (cfg.enabled && cfg.strictMode && !isWhitelisted(path, cfg.whiteList)) {
+      return makeResponse('403 Forbidden: Repository not in whitelist', 403, { 'content-type': 'text/plain; charset=utf-8' })
+    }
     return handleWhitelistWithFallback(req, path)
   } else {
     // 非代理路径：交给 Pages 静态资源
