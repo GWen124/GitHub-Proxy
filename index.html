@@ -145,31 +145,41 @@
                         finalUrl = convertToJsDelivr(url);
                         note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
                     }
+                    const isSuccess = false;
+                    const badge = '<span class="badge ' + (isSuccess ? 'success' : 'warn') + '">' + (isSuccess ? '本代理' : 'jsDelivr') + '</span>';
+                    result.style.display='block';
+                    result.innerHTML = '<div class="result-card">'
+                      + '<div class="url-line"><a href="' + finalUrl + '" target="_blank" title="' + finalUrl + '">' + finalUrl + '</a></div>'
+                      + '<div class="note">' + badge + '<span>' + note + '</span></div>'
+                      + '<div class="actions"><button class="btn-copy" id="copyBtn">点击复制链接</button><button class="btn-copy push-right" id="openBtn">点击打开链接</button></div>'
+                      + '</div>';
+                    const copyBtn = document.getElementById('copyBtn');
+                    copyBtn?.addEventListener('click', () => copyToClipboard(finalUrl));
+                    const openBtn = document.getElementById('openBtn');
+                    openBtn?.addEventListener('click', () => window.open(finalUrl, '_blank'));
                 } else {
-                    const candidate = ASSET_URL + '/' + url;
-                    const ok = await headCheck(candidate);
-                    if (ok) {
-                        finalUrl = candidate;
-                        note = '✅ 白名单仓库，优先使用本代理（失败自动切换jsDelivr代理）';
-                    } else {
-                        finalUrl = convertToJsDelivr(url);
-                        note = '⚠️ 本代理不可用，已切换 jsDelivr（白名单回退）';
-                    }
+                    // 白名单：同时生成 本地 与 jsDelivr 两个链接
+                    const localUrl = ASSET_URL + '/' + url;
+                    const jsdUrl = convertToJsDelivr(url);
+                    const localOk = await headCheck(localUrl);
+                    const localBadge = '<span class="badge ' + (localOk ? 'success' : 'warn') + '">' + (localOk ? '本地可用' : '本地不可用') + '</span>';
+                    const jsdBadge = '<span class="badge success">jsDelivr</span>';
+                    result.style.display='block';
+                    result.innerHTML = '<div class="result-card">'
+                      + '<div class="url-line"><a href="' + localUrl + '" target="_blank" title="' + localUrl + '">' + localUrl + '</a></div>'
+                      + '<div class="note">' + localBadge + '<span>白名单仓库，本地优先（失败可切换 jsDelivr）</span></div>'
+                      + '<div class="actions"><button class="btn-copy" id="copyLocalBtn">复制本地链接</button><button class="btn-copy push-right" id="openLocalBtn">打开本地链接</button></div>'
+                      + '<hr style="margin:12px 0;border:none;border-top:1px dashed #e5e7eb;" />'
+                      + '<div class="url-line"><a href="' + jsdUrl + '" target="_blank" title="' + jsdUrl + '">' + jsdUrl + '</a></div>'
+                      + '<div class="note">' + jsdBadge + '<span>备用 CDN 链接</span></div>'
+                      + '<div class="actions"><button class="btn-copy" id="copyJsdBtn">复制 jsDelivr</button><button class="btn-copy push-right" id="openJsdBtn">打开 jsDelivr</button></div>'
+                      + '</div>';
+                    document.getElementById('copyLocalBtn')?.addEventListener('click', () => copyToClipboard(localUrl));
+                    document.getElementById('openLocalBtn')?.addEventListener('click', () => window.open(localUrl, '_blank'));
+                    document.getElementById('copyJsdBtn')?.addEventListener('click', () => copyToClipboard(jsdUrl));
+                    document.getElementById('openJsdBtn')?.addEventListener('click', () => window.open(jsdUrl, '_blank'));
                 }
             }
-
-            const isSuccess = note.indexOf('使用本代理') >= 0;
-            const badge = '<span class="badge ' + (isSuccess ? 'success' : 'warn') + '">' + (isSuccess ? '本代理' : 'jsDelivr') + '</span>';
-            result.style.display='block';
-            result.innerHTML = '<div class="result-card">'
-              + '<div class="url-line"><a href="' + finalUrl + '" target="_blank" title="' + finalUrl + '">' + finalUrl + '</a></div>'
-              + '<div class="note">' + badge + '<span>' + note + '</span></div>'
-              + '<div class="actions"><button class="btn-copy" id="copyBtn">点击复制链接</button><button class="btn-copy push-right" id="openBtn">点击打开链接</button></div>'
-              + '</div>';
-            const copyBtn = document.getElementById('copyBtn');
-            copyBtn?.addEventListener('click', () => copyToClipboard(finalUrl));
-            const openBtn = document.getElementById('openBtn');
-            openBtn?.addEventListener('click', () => window.open(finalUrl, '_blank'));
         }
 
         async function copyToClipboard(text) {
