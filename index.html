@@ -133,6 +133,19 @@
                 // 关闭白名单校验但仍处于严格模式：非白名单直接走 jsDelivr
                 finalUrl = convertToJsDelivr(url);
                 note = '⚠️ 非白名单仓库，使用 jsDelivr 代理';
+                const isSuccess = false;
+                const badge = '<span class="badge ' + (isSuccess ? 'success' : 'warn') + '">' + (isSuccess ? '本代理' : 'jsDelivr') + '</span>';
+                result.style.display='block';
+                result.innerHTML = '<div class="result-card">'
+                  + '<div class="url-line"><a href="' + finalUrl + '" target="_blank" title="' + finalUrl + '">' + finalUrl + '</a></div>'
+                  + '<div class="note">' + badge + '<span>' + note + '</span></div>'
+                  + '<div class="actions"><button class="btn-copy" id="copyBtn">点击复制链接</button><button class="btn-copy push-right" id="openBtn">点击打开链接</button></div>'
+                  + '</div>';
+                const copyBtn1 = document.getElementById('copyBtn');
+                copyBtn1?.addEventListener('click', () => copyToClipboard(finalUrl));
+                const openBtn1 = document.getElementById('openBtn');
+                openBtn1?.addEventListener('click', () => window.open(finalUrl, '_blank'));
+                return;
             } else {
                 // 仅白名单允许尝试本代理；非白名单的处理：
                 // - 严格模式且关闭校验（ENABLED=false, STRICT_MODE=true）：直接 jsDelivr
